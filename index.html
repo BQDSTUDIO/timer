@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Afteltimer</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f5f5f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 0;
+            color: #333;
+        }
+
+        .container {
+            text-align: center;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            width: 90%;
+            max-width: 600px;
+        }
+
+        h1 {
+            margin-top: 0;
+            margin-bottom: 30px;
+            color: #2c3e50;
+        }
+
+        .timer-display {
+            font-size: 4rem;
+            font-weight: bold;
+            color: #3498db;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+        }
+
+        .timer-text {
+            font-size: 1.2rem;
+            margin-bottom: 30px;
+            color: #666;
+        }
+
+        .settings {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+
+        .time-input {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+            text-align: center;
+            width: 60px;
+        }
+
+        select {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+            background-color: white;
+        }
+
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 10px 20px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: #2980b9;
+        }
+
+        .progress-container {
+            background-color: #eee;
+            border-radius: 5px;
+            height: 10px;
+            width: 100%;
+            margin: 20px 0;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0;
+            background-color: #3498db;
+            transition: width 1s linear;
+        }
+
+        .error {
+            color: #e74c3c;
+            margin-top: 10px;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Afteltimer</h1>
+        
+        <div class="timer-text">Aftellen naar: <span id="target-time">17:00</span></div>
+        <div class="timer-display" id="timer">00:00:00</div>
+        <div class="timer-text" id="timer-text">Nog 1 uur te gaan</div>
+        
+        <div class="progress-container">
+            <div class="progress-bar" id="progress-bar"></div>
+        </div>
+        
+        <div class="settings">
+            <h3>Tijdstip instellen</h3>
+            <div class="time-input">
+                <input type="number" id="hours" min="0" max="23" value="17"> :
+                <input type="number" id="minutes" min="0" max="59" value="00">
+            </div>
+            <button id="set-timer">Timer instellen</button>
+            <div class="error" id="error-message"></div>
+        </div>
+    </div>
+
+    <script>
+        // DOM elementen selecteren
+        const timerDisplay = document.getElementById('timer');
+        const timerText = document.getElementById('timer-text');
+        const targetTimeDisplay = document.getElementById('target-time');
+        const progressBar = document.getElementById('progress-bar');
+        const hoursInput = document.getElementById('hours');
+        const minutesInput = document.getElementById('minutes');
+        const setTimerButton = document.getElementById('set-timer');
+        const errorMessage = document.getElementById('error-message');
+
+        // Variabelen voor de timer
+        let targetTime;
+        let startTime;
+        let totalDuration;
+        let countdownInterval;
+        let isRunning = false;
+
+        // Hulpfunctie om getallen te formatteren (voegt een 0 toe voor getallen onder 10)
+        function formatNumber(number) {
+            return number < 10 ? '0' + number : number;
+        }
+
+        // Hulpfunctie om tijd te formatteren als HH:MM:SS
+        function formatTime(hours, minutes, seconds) {
+            return `${formatNumber(hours)}:${formatNumber(minutes)}:${formatNumber(seconds)}`;
+        }
+
+        // Hulpfunctie om een duidelijke beschrijving van de resterende tijd te maken
+        function formatTimeText(hours, minutes, seconds) {
+            let text = 'Nog ';
+            
+            if (hours > 0) {
+                text += hours + (hours === 1 ? ' uur' : ' uren');
+                if (minutes > 0 || seconds > 0) text += ', ';
+            }
+            
+            if (minutes > 0) {
+                text += minutes + (minutes === 1 ? ' minuut' : ' minuten');
+                if (seconds > 0) text += ' en ';
+            }
+            
+            if ((hours === 0 && minutes === 0) || seconds > 0) {
+                text += seconds + (seconds === 1 ? ' seconde' : ' seconden');
+            }
+            
+            text += ' te gaan';
+            return text;
+        }
+
+        // Functie om de timer te starten/updaten
+        function setTimer() {
+            // Huidige tijd verkrijgen
+            const now = new Date();
+            
+            // Doeltijd instellen
+            const targetHours = parseInt(hoursInput.value);
+            const targetMinutes = parseInt(minutesInput.value);
+            
+            if (isNaN(targetHours) || isNaN(targetMinutes)) {
+                errorMessage.textContent = 'Voer geldige uren en minuten in.';
+                return;
+            }
+            
+            if (targetHours < 0 || targetHours > 23 || targetMinutes < 0 || targetMinutes > 59) {
+                errorMessage.textContent = 'Uren moeten tussen 0-23 zijn en minuten tussen 0-59.';
+                return;
+            }
+            
+            errorMessage.textContent = '';
+            
+            // Doeltijd instellen op vandaag
+            targetTime = new Date(now);
+            targetTime.setHours(targetHours, targetMinutes, 0, 0);
+            
+            // Als de doeltijd al gepasseerd is, stel deze in op morgen
+            if (targetTime <= now) {
+                targetTime.setDate(targetTime.getDate() + 1);
+            }
+            
+            // Timer starten
+            startTime = now;
+            totalDuration = targetTime - startTime;
+            
+            // Timer display bijwerken
+            targetTimeDisplay.textContent = `${formatNumber(targetHours)}:${formatNumber(targetMinutes)}`;
+            
+            // Timer stoppen als deze al loopt
+            if (isRunning) {
+                clearInterval(countdownInterval);
+            }
+            
+            // Timer starten
+            updateTimer();
+            countdownInterval = setInterval(updateTimer, 1000);
+            isRunning = true;
+        }
+
+        // Functie om de timer te updaten
+        function updateTimer() {
+            const now = new Date();
+            const timeLeft = targetTime - now;
+            
+            if (timeLeft <= 0) {
+                clearInterval(countdownInterval);
+                timerDisplay.textContent = '00:00:00';
+                timerText.textContent = 'Tijd is verstreken!';
+                progressBar.style.width = '100%';
+                isRunning = false;
+                return;
+            }
+            
+            // Resterende tijd berekenen
+            const hours = Math.floor(timeLeft / (1000 * 60 * 60));
+            const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
+            
+            // Timer display bijwerken
+            timerDisplay.textContent = formatTime(hours, minutes, seconds);
+            timerText.textContent = formatTimeText(hours, minutes, seconds);
+            
+            // Voortgangsbalk bijwerken
+            const elapsedTime = now - startTime;
+            const progress = Math.min((elapsedTime / totalDuration) * 100, 100);
+            progressBar.style.width = (100 - progress) + '%';
+        }
+
+        // Event listener voor de 'Timer instellen' knop
+        setTimerButton.addEventListener('click', setTimer);
+
+        // Validatie voor invoervelden
+        hoursInput.addEventListener('input', function() {
+            if (this.value > 23) this.value = 23;
+            if (this.value < 0) this.value = 0;
+        });
+
+        minutesInput.addEventListener('input', function() {
+            if (this.value > 59) this.value = 59;
+            if (this.value < 0) this.value = 0;
+        });
+
+        // Timer instellen bij het laden van de pagina (standaard naar 17:00)
+        window.addEventListener('load', setTimer);
+    </script>
+</body>
+</html>
